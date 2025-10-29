@@ -78,9 +78,6 @@ DEC_OK:
 DEC_DONE:
     RCALL SHOW_COUNT
 
-
-
-; wait for SW2 release
 ; Wait for released button SW2 (PA1 goes HIGH)
 WAIT_REL_DEC:
     SBIS PINA, 1           ; skip next if bit is set (released = 1)
