@@ -26,14 +26,14 @@ AGAIN:
 ; Wait for pressed button SW1 (PA0 has an ACTIVE-LOW)
 WAIT_PRESS:
     SBIC PINA, 0      ; skip next if bit is clear (pressed = 0)
-    RJMP WAIT_PRESS   ; if released, keep waiting (pressed = 1)
+    RJMP CHK_DEC_PRESS   ; if released, begin decrement sequence (pressed = 1)
 
     ; debounce press
     RCALL DEBOUNCE
 
     ; confirm still pressed after debounce
     SBIC PINA, 0
-    RJMP WAIT_PRESS
+    RJMP CHK_DEC_PRESS
 
     ; increment 0-25 w/ wrap-around
     INC  cnt
@@ -56,7 +56,7 @@ WAIT_RELEASE:
     SBIS PINA, 0
     RJMP WAIT_RELEASE
 
-	RJMP AGAIN
+	RJMP CHK_DEC_PRESS
 
 ; SW2 for Decrement
 ; Wait for pressed button SW2 (PA1 has an ACTIVE-LOW)
