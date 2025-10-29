@@ -1,4 +1,6 @@
 ; Initialization
+.def cnt = R16
+
 CBI  DDRA, 0          ; PA0 input (SW1)
 CBI  DDRA, 1          ; PA1 input (SW2)
 SBI  PORTA, 0         ; pull-up on PA0
