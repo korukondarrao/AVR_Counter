@@ -1,4 +1,7 @@
+; --------------
 ; Initialization
+; --------------
+
 .def cnt = R16
 
 CBI  DDRA, 0          ; PA0 input (SW1)
