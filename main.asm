@@ -8,14 +8,19 @@
 
 CBI  DDRA, 0          ; PA0 input (SW1)
 CBI  DDRA, 1          ; PA1 input (SW2)
+CBI  DDRA, 2          ; PA2 input (SW3)
 SBI  PORTA, 0         ; pull-up on PA0
 SBI  PORTA, 1         ; pull-up on PA1
+SBI  PORTA, 2         ; pull-up on PA2
 
 SBI  DDRD, 0          ; PD0 output (LED1)
 SBI  DDRD, 1		  ; PD1 output (LED2)
 SBI  DDRD, 2		  ; PD2 output (LED3)
-SBI  DDRD, 3		  ; PD3 output (LED4)
-SBI  DDRD, 4		  ; PD4 output (LED5)
+SBI  DDRD, 3		  ; PD3 output (LED4B)
+SBI  DDRD, 4		  ; PD4 output (LED6B)
+
+SBI	 DDRE, 4		  ; PE4 output (buzzer)
+CBI PORTE, 4		
 
 CLR  cnt              ; start count at 0
 RCALL SHOW_COUNT
@@ -24,57 +29,59 @@ AGAIN:
 
 ; SW1 for Increment
 ; Wait for pressed button SW1 (PA0 has an ACTIVE-LOW)
-WAIT_PRESS:
+
     SBIC PINA, 0      ; skip next if bit is clear (pressed = 0)
-    RJMP CHK_DEC_PRESS   ; if released, begin decrement sequence (pressed = 1)
+    RJMP CHK_SW2   ; if released, begin decrement sequence (pressed = 1)
 
     ; debounce press
     RCALL DEBOUNCE
 
     ; confirm still pressed after debounce
     SBIC PINA, 0
-    RJMP CHK_DEC_PRESS
+    RJMP CHK_SW2
 
     ; increment 0-25 w/ wrap-around
     INC  cnt
     CPI  cnt, 26
     BRLO INC_OK
     LDI  cnt, 0
+	RCALL BEEP_ROUTINE
 
 INC_OK:
     RCALL SHOW_COUNT
 
 ; Wait for released button SW1 (PA0 goes HIGH)
-WAIT_RELEASE:
+WAIT_SW1:
     SBIS PINA, 0      ; skip next if bit is set (released = 1)
-    RJMP WAIT_RELEASE ; if still held, keep waiting (released = 0)
+    RJMP WAIT_SW1 ; if still held, keep waiting (released = 0)
 
     ; debounce release
     RCALL DEBOUNCE
 
     ; confirm still released after debounce
     SBIS PINA, 0
-    RJMP WAIT_RELEASE
+    RJMP WAIT_SW1
 
-	RJMP CHK_DEC_PRESS
+	RJMP CHK_SW2
 
 ; SW2 for Decrement
 ; Wait for pressed button SW2 (PA1 has an ACTIVE-LOW)
-CHK_DEC_PRESS:
+CHK_SW2:
     SBIC PINA, 1           ; skip next if bit is clear (pressed = 0)
-    RJMP AGAIN             ; if released, keep waiting (pressed = 1)
+    RJMP CHK_SW3	       ; if released, keep waiting (pressed = 1)      
 
 	; debounce press
     RCALL DEBOUNCE
 
 	; confirm still pressed after debounce
     SBIC PINA, 1           ; confirm still pressed
-    RJMP AGAIN
+	RJMP CHK_SW3
 
 	; decrement 0-25 w/ wrap-around
     TST  cnt
     BRNE DEC_OK
-    LDI  cnt, 25           
+    LDI  cnt, 25   
+	RCALL BEEP_ROUTINE_DEC 
     RJMP DEC_DONE
 
 DEC_OK:
@@ -83,18 +90,52 @@ DEC_OK:
 DEC_DONE:
     RCALL SHOW_COUNT
 
+
 ; Wait for released button SW2 (PA1 goes HIGH)
-WAIT_REL_DEC:
+WAIT_SW2:
     SBIS PINA, 1           ; skip next if bit is set (released = 1)
-    RJMP WAIT_REL_DEC	   ; if released, keep waiting (released = 0)
+    RJMP WAIT_SW2	   ; if released, keep waiting (released = 0)
 
 	; debounce release
     RCALL DEBOUNCE
 
 	; confirm still released after debounce
     SBIS PINA, 1
-    RJMP WAIT_REL_DEC
-    RJMP AGAIN
+    RJMP WAIT_SW2
+    RJMP CHK_SW3
+
+; SW3 for Auto-Decrement
+; Auto-down to 0 w/ 0.1 steps, then 1 kHz beep 0.5s
+CHK_SW3:
+	SBIC PINA, 2
+
+	RJMP AGAIN
+
+	RCALL DEBOUNCE
+	SBIC PINA, 2
+
+	RJMP AGAIN
+
+AUTO_DOWN:
+	TST cnt
+	BREQ DO_BEEP
+	DEC cnt
+	RCALL SHOW_COUNT
+	RCALL DELAY_100MS
+	RJMP AUTO_DOWN
+
+DO_BEEP:
+	RCALL BEEP_ROUTINE
+
+WAIT_SW3:
+	SBIS PINA, 2
+	RJMP WAIT_SW3
+
+	RCALL DEBOUNCE
+	SBIS PINA, 2
+	RJMP WAIT_SW3
+
+	RJMP AGAIN
 
 ; SHOW_COUNT: write cnt (the lower 5 bits) to PD0, PD1, PD2, PD3, and PD4
 SHOW_COUNT:
@@ -109,7 +150,7 @@ SHOW_COUNT:
     OUT  PORTD, R17
     RET
 
-; DEBOUNCE: 10ms time delay for LEDs to light up
+; DEBOUNCE: 15ms time delay for LEDs to light up
 DEBOUNCE:
     LDI  R18, 75
 
@@ -124,3 +165,74 @@ DB2:
 	DEC R18
 	BRNE DB1
     RET
+
+; Timed delay 100ms, using timed delay 10ms below
+DELAY_100MS:
+	LDI R19, 10
+D100_1:
+	RCALL DELAY_10MS
+	DEC R19
+	BRNE D100_1
+	RET
+
+; Timed delay 10ms
+DELAY_10MS:
+	LDI R18, 250
+D10_1:
+	LDI R17, 200
+
+D10_2:
+	NOP
+	NOP
+	DEC R17
+	BRNE D10_2
+	DEC R18
+	BRNE D10_1
+	RET
+
+; Beeping routines
+; Beeping routine for 1khz 500 microseconds
+BEEP_ROUTINE:
+	LDI R25, HIGH(500)
+	LDI R24, LOW(500)
+BRLOOP:
+	SBI PORTE, 4
+	RCALL DELAY_500MST
+	CBI PORTE, 4
+	RCALL DELAY_500MST
+	SBIW R24, 1
+	BRNE BRLOOP
+	RET
+
+BEEP_ROUTINE_DEC:
+	LDI R25, HIGH(750)
+	LDI R24, LOW(750)
+BRDLOOP:
+	SBI PORTE, 4
+	RCALL DELAY_333MST
+	CBI PORTE, 4
+	RCALL DELAY_333MST
+	SBIW R24, 1
+	BRNE BRDLOOP
+	RET
+
+; 500 microsecond delay for Beep_Routine 1kHz
+DELAY_500MST:
+	LDI R19, 200
+LOOPD500:
+	NOP
+	NOP
+	DEC R19
+	BRNE LOOPD500
+	RET
+
+; 333 microsecond delay for Beep_Routine 1.5kHz
+DELAY_333MST:
+	LDI R19, 133
+LOOPD333:
+	NOP
+	NOP
+	DEC R19
+	BRNE LOOPD333
+	RET
+	
